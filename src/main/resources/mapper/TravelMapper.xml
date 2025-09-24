@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.multi.travelproject.mapper.TravelMapper">
+
+    <!-- 공통 컬럼 -->
+    <sql id="COLUMNS">
+        no, district, title, description, address, phone, latitude, longitude
+    </sql>
+
+    <!--  공통 WHERE -->
+    <sql id="BASE_WHERE">
+        <where>
+            latitude IS NOT NULL
+            AND longitude IS NOT NULL
+
+            <!-- 검색어가 있으면 :kw 바인딩( '%검색어%' ) -->
+            <if test="q != null and q != ''">
+                <bind name="kw" value="'%' + q + '%'" />
+                AND (
+                title   LIKE #{kw}
+                OR address LIKE #{kw}
+                OR district LIKE #{kw}
+                )
+            </if>
+        </where>
+    </sql>
+
+    <!-- 목록 페이지네이션 -->
+    <select id="selectPageWithCoords" resultType="com.multi.travelproject.domain.Travel">
+        SELECT <include refid="COLUMNS"/>
+        FROM travel
+        <include refid="BASE_WHERE"/>
+        ORDER BY no ASC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <!-- 총 개수: 페이지 계산용 -->
+    <select id="countWithCoords" resultType="long">
+        SELECT COUNT(*) FROM travel
+        <include refid="BASE_WHERE"/>
+    </select>
+
+    <!-- 상세 단건 -->
+    <select id="selectByNo" resultType="com.multi.travelproject.domain.Travel">
+        SELECT <include refid="COLUMNS"/>
+        FROM travel
+        WHERE no = #{no}
+    </select>
+</mapper>

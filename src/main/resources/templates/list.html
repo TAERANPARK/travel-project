@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>관광 명소 찾기 (Kakao Map + 이미지 확대)</title>
+
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a495c5944000f839243cd8711eb3591b&autoload=false&libraries=services,clusterer"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", Arial; }
+        header { padding: 14px 18px; border-bottom: 1px solid #eee; display:flex; gap:12px; align-items:center }
+        header h1 { font-size: 18px; margin: 0 8px 0 0 }
+        header .hint { color:#666; font-size: 13px }
+
+        .container { display: grid; grid-template-columns: 410px 1fr; height: calc(100vh - 60px); gap:12px; }
+        .left { border-right:1px solid #eee; padding:12px; overflow:auto; background:#fff; }
+        .left h2 { margin: 6px 0 10px; font-size: 16px; }
+        .search-box { position:sticky; top:0; background:#fff; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px; display:flex; gap:6px; }
+        .search-box input { flex:1; padding:10px 12px; border:1px solid #ccc; border-radius:10px; }
+        .search-box button { padding:10px 12px; border:1px solid #333; background:#fff; color:#333; border-radius:10px; cursor:pointer; }
+
+        .results { display:grid; gap:8px; }
+        .card { border:1px solid #eee; border-radius:12px; padding:10px; cursor:pointer; }
+        .card h3 { margin:0 0 4px; font-size:15px }
+        .card p { margin:0; color:#666; font-size:13px }
+
+        .map { position:relative }
+        #map { width:100%; height:100%; min-height:460px; border:1px solid #eee; border-radius:12px }
+
+        .pagination { display:flex; gap:6px; margin:12px 0; flex-wrap:wrap; }
+        .pagination button { padding:6px 10px; border:1px solid #ddd; background:#fafafa; border-radius:8px; cursor:pointer; font-size:12px; }
+        .pagination button.active { font-weight:bold; border-color:#333; }
+
+        img.travel-img { width:100%; max-width:180px; aspect-ratio:16/9; object-fit:cover; border-radius:6px; margin-top:6px; cursor:pointer;}
+
+        /* 이미지 확대 모달 */
+        #imgModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); justify-content:center; align-items:center; z-index:9999; }
+        #imgModal img { max-width:90%; max-height:90%; border-radius:8px; }
+        #imgModal .close { position:absolute; top:20px; right:30px; font-size:24px; color:#fff; cursor:pointer; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>관광 명소 찾기</h1>
+    <span class="hint">DB 검색 + Kakao InfoWindow + 이미지 확대</span>
+</header>
+
+<div class="container">
+    <aside class="left">
+        <h2>DB 관광지 목록</h2>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="예) 경복궁, 수원, 제주…" />
+            <button id="searchBtn">검색</button>
+        </div>
+        <div class="results" id="dbResults"></div>
+        <div class="pagination" id="pagination"></div>
+    </aside>
+
+    <main class="map">
+        <div id="map"></div>
+    </main>
+</div>
+
+<!-- 이미지 확대 -->
+<div id="imgModal">
+    <span class="close">&times;</span>
+    <img src="" alt="확대 이미지" />
+</div>
+
+<script>
+    kakao.maps.load(function () {
+        // 지도 & InfoWindow
+        const map = new kakao.maps.Map(document.getElementById('map'), {
+            center: new kakao.maps.LatLng(37.5665, 126.9780), level: 6
+        });
+        const infowindow = new kakao.maps.InfoWindow({ zIndex: 2, removable: true });
+        kakao.maps.event.addListener(map, 'click', () => {
+            infowindow.close();
+        });
+
+        // DOM
+        const $dbResults   = document.getElementById('dbResults');
+        const $pagination  = document.getElementById('pagination');
+        const $searchInput = document.getElementById('searchInput');
+        const $searchBtn   = document.getElementById('searchBtn');
+
+        // 모달
+        const $imgModal   = document.getElementById('imgModal');
+        const $modalImg   = $imgModal.querySelector('img');
+        const $modalClose = $imgModal.querySelector('.close');
+        $modalClose.onclick = () => $imgModal.style.display = 'none';
+        $imgModal.onclick   = (e) => { if (e.target === $imgModal) $imgModal.style.display = 'none'; };
+
+        // 상태
+        let currentPage  = 1;
+        const PAGE_SIZE  = 10;
+        let currentQuery = '';
+        let markers      = [];
+
+        function clearMarkers() { markers.forEach(m => m.setMap(null)); markers = []; }
+
+        const sanitize = (s) =>
+            (s ?? '')
+                .normalize('NFKC')
+                .replace(/[^\p{L}\p{N}]/gu, '');
+        // // ===== 이미지: 서버 프록시 호출 + 로드 검증 + https 보정 =====
+        async function fetchImages(title) {
+            const serviceKey = "a4401d8a88e128c93a0b07de2607c9cc6bc052260ba07d46f2621555d17e9625";
+            const raw = title.slice(3, 10);
+            const keyword = sanitize(raw);
+            const url = `https://apis.data.go.kr/B551011/KorService2/searchKeyword2?serviceKey=${serviceKey}&MobileOS=ETC&MobileApp=AppTest&_type=json&keyword=${encodeURIComponent(keyword)}&numOfRows=2&pageNo=1`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                const items = data?.response?.body?.items?.item;
+                if(!items) return ["/img/default.jpg"];
+                const arr = Array.isArray(items) ? items : [items];
+                const imgs = arr.map(i=>i.firstimage||i.firstimage2).filter(Boolean);
+                return imgs.length ? imgs : ["/img/default.jpg"];
+            } catch(e) {
+                console.error("이미지 불러오기 실패", e);
+                return ["/img/default.jpg"];
+            }
+        }
+
+
+        // ===== DB 목록 로드 =====
+        async function loadTravelData(page = 1, q = '') {
+            try {
+                let url = `/api/travels?page=${page}&size=${PAGE_SIZE}`;
+                if (q) url += `&q=${encodeURIComponent(q)}`;
+
+                const res  = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                if (!res.ok) {
+                    const txt = await res.text().catch(()=> '');
+                    throw new Error(`GET ${url} -> HTTP ${res.status} ${res.statusText}\n${txt}`);
+                }
+                const data = await res.json();
+
+                const items      = Array.isArray(data.content) ? data.content : [];
+                const total      = Number.isFinite(data.total) ? data.total : items.length;
+                const cur        = Number.isFinite(data.page)  ? data.page  : page;
+                const size       = Number.isFinite(data.size)  ? data.size  : PAGE_SIZE;
+                const totalPages = Math.max(1, Math.ceil(total / size));
+
+                await renderTravelList(items);
+                renderPagination(totalPages, cur);
+            } catch (e) {
+                console.error('DB 데이터 로드 실패\n', e);
+                $dbResults.innerHTML = '<div class="card" style="cursor:default">목록을 불러오지 못했습니다.</div>';
+                $pagination.innerHTML = '';
+            }
+        }
+
+        async function renderTravelList(items) {
+            $dbResults.innerHTML = '';
+            clearMarkers();
+
+            if (!items.length) {
+                $dbResults.innerHTML = '<div class="card" style="cursor:default">검색 결과가 없습니다.</div>';
+                return;
+            }
+
+            const bounds = new kakao.maps.LatLngBounds();
+
+            for (const t of items) {
+                // 목록 카드
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `<h3>${t.title}</h3><p>🚩${t.address ?? ''}</p><p>☎️${t.phone}</p>`;
+                $dbResults.appendChild(card);
+
+                // 마커/인포윈도우
+                if (t.latitude != null && t.longitude != null) {
+                    const pos    = new kakao.maps.LatLng(t.latitude, t.longitude);
+                    const marker = new kakao.maps.Marker({ position: pos, title: t.title });
+                    marker.setMap(map);
+                    markers.push(marker);
+                    bounds.extend(pos);
+
+                    const showInfo = async () => {
+                        const imgUrls = await fetchImages(t.title);
+                        const imgHtml = imgUrls.map(url=>`<img class="travel-img" src="${url}" alt="${t.title}">`).join("");
+                        const html = `
+                        <div style="padding:8px 10px; max-width:420px; width:420px; line-height:1.5; word-break:keep-all">
+                          <strong style="display:block; margin-bottom:4px">${t.title}</strong>
+                          <div style="color:#555; font-size:12px; margin-bottom:6px">🚩${t.address ?? ''}</div>
+                          <div style="color:#666; font-size:12px">🗒️${t.description ?? ''}</div>
+                          <div style="color:#666; font-size:12px; margin:6px 0">☎️ ${t.phone ?? '-'}</div>
+                          <div style="display:flex; gap:4px; flex-wrap:wrap">${imgHtml}</div>
+                        </div>`;
+                        infowindow.setContent(html);
+                        infowindow.open(map, marker);
+
+                        // 썸네일 클릭 → 확대
+                        const imgs = document.querySelectorAll(".travel-img");
+                        imgs.forEach(img=>{
+                            img.onclick = () => {
+                                $modalImg.src = img.src;
+                                $imgModal.style.display = "flex";
+                            };
+                        });
+                    };
+
+                    kakao.maps.event.addListener(marker, 'click', showInfo);
+                    card.onclick = showInfo;
+
+                } else {
+                    card.onclick = () => alert('이 관광지는 좌표 정보가 없습니다.');
+                }
+            }
+
+            if (markers.length) map.setBounds(bounds);
+        }
+
+        // ===== 페이지네이션 =====
+        function renderPagination(totalPages, current) {
+            const $pg = $pagination;
+            if (totalPages <= 1) { $pg.innerHTML = ''; return; }
+
+            const BLOCK = 5;
+            const cur   = Math.max(1, current);
+            const blk   = Math.floor((cur - 1) / BLOCK);
+            const start = blk * BLOCK + 1;
+            const end   = Math.min(start + BLOCK - 1, totalPages);
+
+            const btn = (label, p, disabled=false, active=false) =>
+                `<button ${disabled?'disabled':''} class="${active?'active':''}" data-page="${p}">${label}</button>`;
+
+            $pg.innerHTML =
+                btn('«', 1, cur === 1) +
+                btn('‹', Math.max(1, start - 1), start === 1) +
+                Array.from({length: end - start + 1}, (_, i) => {
+                    const p = start + i;
+                    return btn(p, p, false, p === cur);
+                }).join('') +
+                btn('›', Math.min(totalPages, end + 1), end === totalPages) +
+                btn('»', totalPages, cur === totalPages);
+
+            $pg.querySelectorAll('button[data-page]').forEach(b => {
+                b.onclick = () => {
+                    currentPage = parseInt(b.dataset.page, 10);
+                    loadTravelData(currentPage, currentQuery);
+                };
+            });
+        }
+
+        // 검색 이벤트
+        $searchBtn.onclick = () => {
+            currentQuery = $searchInput.value.trim();
+            currentPage  = 1;
+            loadTravelData(currentPage, currentQuery);
+        };
+        $searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') $searchBtn.click(); });
+
+        // 첫 로드
+        loadTravelData();
+    });
+</script>
+</body>
+</html>

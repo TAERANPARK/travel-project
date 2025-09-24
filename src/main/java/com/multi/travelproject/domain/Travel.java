@@ -1,15 +1,15 @@
-package com.multi.travelproject.dto;
+package com.multi.travelproject.domain;
 
 import lombok.Data;
 
 @Data
-public class TravelDTO {
+public class Travel {
     private int no;
     private String district;
     private String title;
     private String description;
     private String address;
     private String phone;
-    private Double latitude;
-    private Double longitude;
+    private Double latitude; //위도
+    private Double longitude; //경도
 }
