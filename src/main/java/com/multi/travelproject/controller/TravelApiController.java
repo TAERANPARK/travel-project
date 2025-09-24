@@ -3,7 +3,6 @@ package com.multi.travelproject.controller;
 import com.multi.travelproject.domain.Travel;
 import com.multi.travelproject.service.TourImageService;
 import com.multi.travelproject.service.TravelService;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -22,18 +21,18 @@ public class TravelApiController {
         this.imageService  = imageService;
     }
 
-    // 목록(검색/페이징) – 기존에 사용하던 엔드포인트 유지
+    // 목록(검색/페이징)
     @GetMapping
     public Map<String, Object> list(@RequestParam(defaultValue = "1") int page,
                                     @RequestParam(defaultValue = "10") int size,
                                     @RequestParam(required = false) String q) {
-        // 너가 이미 구현한 findPageWithCoords/countWithCoords를 사용
+
         List<Travel> content = travelService.findPageWithCoords(q, size, (page - 1) * size);
         long total = travelService.countWithCoords(q);
         return Map.of("content", content, "total", total, "page", page, "size", size);
     }
 
-    // 상세: DB + 이미지 URL 합치기(노트 4번 그대로)
+    // 상세: DB + 이미지 URL 합치기
     @GetMapping("/{no}")
     public Map<String, Object> detail(@PathVariable Long no) {
         Travel dto = travelService.findByNo(no);

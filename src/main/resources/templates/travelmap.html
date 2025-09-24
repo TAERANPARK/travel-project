@@ -10,31 +10,37 @@
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", Arial; }
+        /* 헤더: 상단 타이틀 영역 */
         header { padding: 14px 18px; border-bottom: 1px solid #eee; display:flex; gap:12px; align-items:center }
         header h1 { font-size: 18px; margin: 0 8px 0 0 }
         header .hint { color:#666; font-size: 13px }
-
+        /* 메인 컨테이너: 좌측 목록 + 우측 지도 */
         .container { display: grid; grid-template-columns: 410px 1fr; height: calc(100vh - 60px); gap:12px; }
+        /* 좌측 목록 영역 */
         .left { border-right:1px solid #eee; padding:12px; overflow:auto; background:#fff; }
         .left h2 { margin: 6px 0 10px; font-size: 16px; }
+        /* 검색 박스: sticky로 상단 고정 + 입력/버튼 UI */
         .search-box { position:sticky; top:0; background:#fff; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px; display:flex; gap:6px; }
         .search-box input { flex:1; padding:10px 12px; border:1px solid #ccc; border-radius:10px; }
         .search-box button { padding:10px 12px; border:1px solid #333; background:#fff; color:#333; border-radius:10px; cursor:pointer; }
-
+        /* DB 결과 카드 리스트 */
         .results { display:grid; gap:8px; }
         .card { border:1px solid #eee; border-radius:12px; padding:10px; cursor:pointer; }
         .card h3 { margin:0 0 4px; font-size:15px }
         .card p { margin:0; color:#666; font-size:13px }
-
+        /* 지도 영역 */
         .map { position:relative }
         #map { width:100%; height:100%; min-height:460px; border:1px solid #eee; border-radius:12px }
-
+        /* 페이지네이션 버튼 */
         .pagination { display:flex; gap:6px; margin:12px 0; flex-wrap:wrap; }
         .pagination button { padding:6px 10px; border:1px solid #ddd; background:#fafafa; border-radius:8px; cursor:pointer; font-size:12px; }
         .pagination button.active { font-weight:bold; border-color:#333; }
-
+        /* DB 인포윈도우 전용 */
+        .db-iw{ padding:8px 10px; max-width:420px; width:420px; line-height:1.5; word-break:keep-all; border-radius:8px; }
+        /* 주변 인포윈도우 전용 */
+        .nearby-iw{ padding:8px 10px; max-width:420px; width:200px; line-height:1.5; word-break:keep-all; border-radius:8px; font-size:12px;}
+        /* 인포윈도우 내부 썸네일 이미지 */
         img.travel-img { width:100%; max-width:180px; aspect-ratio:16/9; object-fit:cover; border-radius:6px; margin-top:6px; cursor:pointer;}
-
         /* 이미지 확대 모달 */
         #imgModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); justify-content:center; align-items:center; z-index:9999; }
         #imgModal img { max-width:90%; max-height:90%; border-radius:8px; }
@@ -48,6 +54,7 @@
 </header>
 
 <div class="container">
+    <!-- 좌측: DB에서 가져온 관광지 목록 + 페이지네이션 -->
     <aside class="left">
         <h2>DB 관광지 목록</h2>
         <div class="search-box">
@@ -57,7 +64,7 @@
         <div class="results" id="dbResults"></div>
         <div class="pagination" id="pagination"></div>
     </aside>
-
+    <!-- 우측: 카카오 지도 -->
     <main class="map">
         <div id="map"></div>
     </main>
@@ -75,22 +82,44 @@
         const map = new kakao.maps.Map(document.getElementById('map'), {
             center: new kakao.maps.LatLng(37.5665, 126.9780), level: 6
         });
+        // DB 장소(메인)용 인포윈도우(닫기 X 버튼 포함)
         const infowindow = new kakao.maps.InfoWindow({ zIndex: 2, removable: true });
+        // 주변 관광지(AT4) 마커에 적용할 "초록핀" 아이콘
+        const greenMarkerImg = new kakao.maps.MarkerImage(
+            '/img/pin-green.svg',
+            new kakao.maps.Size(24, 35),
+            { offset: new kakao.maps.Point(12, 35) }
+        );
+        // 주변 관광지용 공용 인포윈도우
+        const nearbyInfoWindow = new kakao.maps.InfoWindow({ zIndex: 1 });
+        // 지도 빈 곳 클릭 시: 메인 인포윈도우 닫고 주변 마커/인포윈도우 정리
         kakao.maps.event.addListener(map, 'click', () => {
             infowindow.close();
+            clearNearby();
         });
 
-        // DOM
-        const $dbResults   = document.getElementById('dbResults');
-        const $pagination  = document.getElementById('pagination');
-        const $searchInput = document.getElementById('searchInput');
-        const $searchBtn   = document.getElementById('searchBtn');
+        // 주변 검색
+        const places = new kakao.maps.services.Places(); // 카테고리/키워드 검색기
+        let nearbyMarkers = [];
+        // 주변 마커/인포윈도우 일괄 정리
+        function clearNearby() {
+            nearbyMarkers.forEach(m => m.setMap(null));
+            nearbyMarkers = [];
+            nearbyInfoWindow.close();
+        }
 
-        // 모달
+        // DOM
+        const $dbResults   = document.getElementById('dbResults');// 좌측 결과 영역
+        const $pagination  = document.getElementById('pagination');// 페이지네이션
+        const $searchInput = document.getElementById('searchInput');// 검색 입력
+        const $searchBtn   = document.getElementById('searchBtn');// 검색 버튼
+
+        // 이미지 확대 모달 제어
         const $imgModal   = document.getElementById('imgModal');
         const $modalImg   = $imgModal.querySelector('img');
         const $modalClose = $imgModal.querySelector('.close');
         $modalClose.onclick = () => $imgModal.style.display = 'none';
+        // 배경 클릭 시 닫기
         $imgModal.onclick   = (e) => { if (e.target === $imgModal) $imgModal.style.display = 'none'; };
 
         // 상태
@@ -100,15 +129,18 @@
         let markers      = [];
 
         function clearMarkers() { markers.forEach(m => m.setMap(null)); markers = []; }
-
+        /* 이미지 가져오기 (공공데이터포털)
+              - title 일부를 키워드로 사용
+              - 네트워크/응답 실패 시 기본 이미지 대체
+         */
         const sanitize = (s) =>
             (s ?? '')
                 .normalize('NFKC')
-                .replace(/[^\p{L}\p{N}]/gu, '');
+                .replace(/[^\p{L}\p{N}]/gu, ''); // 한글/영문/숫자만 남김
         // // ===== 이미지: 서버 프록시 호출 + 로드 검증 + https 보정 =====
         async function fetchImages(title) {
             const serviceKey = "a4401d8a88e128c93a0b07de2607c9cc6bc052260ba07d46f2621555d17e9625";
-            const raw = title.slice(3, 10);
+            const raw = title.slice(3, 10); //제목 일부
             const keyword = sanitize(raw);
             const url = `https://apis.data.go.kr/B551011/KorService2/searchKeyword2?serviceKey=${serviceKey}&MobileOS=ETC&MobileApp=AppTest&_type=json&keyword=${encodeURIComponent(keyword)}&numOfRows=2&pageNo=1`;
             try {
@@ -126,12 +158,12 @@
         }
 
 
-        // ===== DB 목록 로드 =====
+        // DB 관광지 목록 로드 /api/travels (page/size/q) 호출 → 리스트/페이지네이션 렌더
         async function loadTravelData(page = 1, q = '') {
             try {
                 let url = `/api/travels?page=${page}&size=${PAGE_SIZE}`;
                 if (q) url += `&q=${encodeURIComponent(q)}`;
-
+                // JSON API 호출
                 const res  = await fetch(url, { headers: { 'Accept': 'application/json' } });
                 if (!res.ok) {
                     const txt = await res.text().catch(()=> '');
@@ -154,6 +186,7 @@
             }
         }
 
+        // 목록&마커 렌더링 카드 클릭 또는 마커 클릭 → 인포윈도우 + 주변 관광지 검색
         async function renderTravelList(items) {
             $dbResults.innerHTML = '';
             clearMarkers();
@@ -179,21 +212,25 @@
                     marker.setMap(map);
                     markers.push(marker);
                     bounds.extend(pos);
-
+                    // 카드&마커 클릭 시 실행되는 함수
                     const showInfo = async () => {
+                        // 썸네일 이미지 준비
                         const imgUrls = await fetchImages(t.title);
                         const imgHtml = imgUrls.map(url=>`<img class="travel-img" src="${url}" alt="${t.title}">`).join("");
+                        // 인포윈도우 HTML 구성
                         const html = `
-                        <div style="padding:8px 10px; max-width:420px; width:420px; line-height:1.5; word-break:keep-all">
+                        <div class="db-iw">
                           <strong style="display:block; margin-bottom:4px">${t.title}</strong>
                           <div style="color:#555; font-size:12px; margin-bottom:6px">🚩${t.address ?? ''}</div>
                           <div style="color:#666; font-size:12px">🗒️${t.description ?? ''}</div>
                           <div style="color:#666; font-size:12px; margin:6px 0">☎️ ${t.phone ?? '-'}</div>
                           <div style="display:flex; gap:4px; flex-wrap:wrap">${imgHtml}</div>
                         </div>`;
+                        // 메인 인포윈도우 오픈
                         infowindow.setContent(html);
                         infowindow.open(map, marker);
-
+                        // 현재 지점 기준으로 주변 관광지(AT4) 검색 → 초록 마커 표시
+                        searchNearbyAttractions(pos);
                         // 썸네일 클릭 → 확대
                         const imgs = document.querySelectorAll(".travel-img");
                         imgs.forEach(img=>{
@@ -203,19 +240,60 @@
                             };
                         });
                     };
+                    kakao.maps.event.addListener(marker, 'click', () => {
+                        map.panTo(pos);   // ← DB 마커 클릭 시만 가운데로 이동
+                        showInfo();
+                    });
 
-                    kakao.maps.event.addListener(marker, 'click', showInfo);
-                    card.onclick = showInfo;
-
+                    card.onclick = () => {
+                        map.panTo(pos);   // ← DB 목록 카드 클릭 시만 가운데로 이동
+                        showInfo();
+                    };
                 } else {
                     card.onclick = () => alert('이 관광지는 좌표 정보가 없습니다.');
                 }
             }
-
             if (markers.length) map.setBounds(bounds);
         }
 
-        // ===== 페이지네이션 =====
+        // 중심 pos 기준, 관광/명소(AT4) 주변 검색 → 마커 표시
+        function searchNearbyAttractions(pos) {
+            clearNearby();
+
+            places.categorySearch(
+                'AT4', // 관광/명소 카테고리
+                (data, status) => {
+                    if (status !== kakao.maps.services.Status.OK) return;
+
+                    data.forEach(place => {
+                        const lat = parseFloat(place.y), lng = parseFloat(place.x);
+                        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                        // 주변 관광지 마커: 초록 아이콘 적용
+                        const m = new kakao.maps.Marker({
+                            position: new kakao.maps.LatLng(lat, lng),
+                            image: greenMarkerImg
+                        });
+                        m.setMap(map);
+                        nearbyMarkers.push(m);
+                        // 주변용 공용 인포윈도우 콘텐츠
+                        const content = `
+                          <div class="nearby-iw">
+                            <strong>${place.place_name}</strong><br/>
+                            <span style="color:#666">${place.road_address_name || place.address_name || ''}</span><br/>
+                            <a href="${place.place_url}" target="_blank" style="color:#06f">카카오맵 상세</a>
+                          </div>`;
+                        kakao.maps.event.addListener(m, 'click', () => {
+                            infowindow.close();
+                            nearbyInfoWindow.setContent(content);
+                            nearbyInfoWindow.open(map, m);
+                        });
+                    });
+                },
+                { location: pos, radius: 1500, sort: 'distance' }
+            );
+        }
+
+        // 페이지네이션 - 5개 단위 블록
         function renderPagination(totalPages, current) {
             const $pg = $pagination;
             if (totalPages <= 1) { $pg.innerHTML = ''; return; }

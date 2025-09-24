@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class Travel {
-    private int no;
+    private long no;
     private String district;
     private String title;
     private String description;

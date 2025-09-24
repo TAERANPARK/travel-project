@@ -36,7 +36,7 @@ public class TravelPageController {
         model.addAttribute("last", last);
         model.addAttribute("total", total);
         model.addAttribute("q", q);
-        return "/list";
+        return "/travelmap";
     }
 
 }
