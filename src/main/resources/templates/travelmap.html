@@ -84,9 +84,9 @@
         });
         // DB 장소(메인)용 인포윈도우(닫기 X 버튼 포함)
         const infowindow = new kakao.maps.InfoWindow({ zIndex: 2, removable: true });
-        // 주변 관광지(AT4) 마커에 적용할 "초록핀" 아이콘
-        const greenMarkerImg = new kakao.maps.MarkerImage(
-            '/img/pin-green.svg',
+        // 주변 관광지(AT4) 마커에 적용할 별 아이콘
+        const img = new kakao.maps.MarkerImage(
+            'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
             new kakao.maps.Size(24, 35),
             { offset: new kakao.maps.Point(12, 35) }
         );
@@ -268,10 +268,10 @@
                     data.forEach(place => {
                         const lat = parseFloat(place.y), lng = parseFloat(place.x);
                         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-                        // 주변 관광지 마커: 초록 아이콘 적용
+                        // 주변 관광지 마커: 별 적용
                         const m = new kakao.maps.Marker({
                             position: new kakao.maps.LatLng(lat, lng),
-                            image: greenMarkerImg
+                            image: img
                         });
                         m.setMap(map);
                         nearbyMarkers.push(m);
