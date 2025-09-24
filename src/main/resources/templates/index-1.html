@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KakaoMap 실습 1단계 - 지도 띄우기</title>
+  <!-- Kakao Maps JS SDK: 앱 키를 아래 YOUR_APP_KEY_HERE 로 교체하세요 -->
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a495c5944000f839243cd8711eb3591b&autoload=false&libraries=services,clusterer"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', Arial; }
+    header { padding: 14px 18px; border-bottom: 1px solid #eee; display:flex; gap:12px; align-items:center; flex-wrap: wrap; }
+    header h1 { font-size: 18px; margin: 0 8px 0 0; }
+    header .hint { color:#666; font-size: 13px; }
+    .wrap { padding: 12px; max-width: 1100px; margin: 0 auto; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; margin-bottom:10px; }
+    input[type="text"], select { padding: 10px 12px; border:1px solid #ddd; border-radius:10px; }
+    input[type="text"] { flex: 1; min-width: 260px; }
+    button { padding: 10px 14px; border:1px solid #ddd; background:#fafafa; border-radius:10px; cursor:pointer; }
+    .map { width:100%; height:420px; border:1px solid #f0f0f0; border-radius: 12px; overflow: hidden; }
+    .list { display:grid; gap:8px; margin-top: 10px; }
+    .card { border:1px solid #eee; border-radius:12px; padding:10px; }
+    .card h3 { margin: 0 0 6px; font-size: 15px; }
+    .card p { margin: 2px 0; color:#555; font-size: 13px; }
+    .small { font-size:12px; color:#777; }
+    .legend { margin-top:8px; color:#666; font-size: 12px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>KakaoMap 실습 1단계</h1>
+  <span class="hint">지도 기본 출력</span>
+</header>
+<div class="wrap">
+
+  <!-- 1단계: 기본 지도 띄우기 -->
+  <div class="row small">※ YOUR_APP_KEY_HERE 를 본인 JavaScript 키로 교체하세요.</div>
+  <div id="map" class="map"></div>
+
+  <script>
+    // Kakao SDK 로드가 끝나면 실행
+    kakao.maps.load(function() {
+      // 1) 지도 컨테이너와 옵션 준비
+      const container = document.getElementById('map');
+      const options = {
+        center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울 시청 근처
+        level: 6 // 숫자가 클수록 넓게 보임
+      };
+      // 2) 지도 생성
+      const map = new kakao.maps.Map(container, options);
+
+      // 3) 기본 마커 하나 (선택)
+      new kakao.maps.Marker({
+        position: new kakao.maps.LatLng(37.5665, 126.9780),
+        map: map
+      });
+    });
+  </script>
+
+</div>
+</body>
+</html>
